@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  lessons-bot:
+    build: .
+    container_name: lessons-bot
+    restart: always
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - lessons_db:/app/lessons.db
+
+volumes:
+  lessons_db:

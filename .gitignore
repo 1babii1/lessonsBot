@@ -1,0 +1,79 @@
+# Папки с зависимостями
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-debug.log*
+
+# Файлы окружения
+.env
+.env.*
+
+# Артефакты сборки
+dist/
+build/
+out/
+.next/
+.nuxt/
+
+# Локальные файлы IDE
+.vscode/
+.idea/
+*.sublime-workspace
+*.iml
+
+# Системные файлы
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbnails
+
+# Журналы и временные файлы
+*.log
+*.tmp
+*.bak
+
+# Тестовые данные
+test-output/
+coverage/
+
+# Файлы ОС Windows
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Файлы редактора Vim
+*.swp
+*.swo
+*.un~
+
+# Файлы macOS
+.AppleDouble
+.LSOverride
+
+# Файлы Python (если есть Python‑код)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Файлы Java (если есть Java‑код)
+*.class
+*.jar
+*.war
+*.ear
+
+# Файлы C/C++
+*.o
+*.a
+*.so
+*.dll
+
+# Файлы резервных копий
+*~
+\#*\#
+
+# Другие специфические папки/файлы вашего проекта (добавьте вручную)
+tmp/
+cache/
+uploads/
