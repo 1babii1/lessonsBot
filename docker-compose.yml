@@ -1,11 +1,14 @@
 version: "3.8"
 services:
   lessons-bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: lessons-bot
     restart: always
     environment:
       - NODE_ENV=production
+      - TELEGRAM_BOT_TOKEN=8286113885:AAFQkw8pjahM1cudDfbrKQY3LQ5J-RGfpg0
     volumes:
       - lessons_db:/app/lessons.db
 
