@@ -1,15 +1,28 @@
 version: "3.8"
 services:
   lessons-bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: lessons-bot
-    restart: always
+    restart: "no"
     environment:
       - NODE_ENV=production
       - TELEGRAM_BOT_TOKEN=8286113885:AAFQkw8pjahM1cudDfbrKQY3LQ5J-RGfpg0
+      - MONGODB_URI=mongodb://mongo:27017/lessonsdb
+    depends_on:
+      - mongo
+    ports:
+      - "3000:3000"
+
+  mongo:
+    image: mongo:6
+    container_name: mongo
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: lessonsdb
+    ports:
+      - "27017:27017"
     volumes:
-      - lessons_db:/app/lessons.db # БД сохраняется между перезапусками
+      - mongo_data:/data/db
+
 volumes:
-  lessons_db:
+  mongo_data:

@@ -1,14 +1,14 @@
 import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
-import sqlite3 from "sqlite3";
+import { MongoClient, Db, Collection } from "mongodb";
+
+dotenv.config();
 
 type Lesson = {
-  id: number;
+  _id: string;
   title: string;
   counter: number;
 };
-
-dotenv.config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -17,50 +17,57 @@ if (!token) {
 
 const bot = new TelegramBot(token, { polling: true });
 
-// Подключение к SQLite
-const db = new sqlite3.Database("/app/lessons.db");
+// Подключение к MongoDB
+const MONGODB_URI =
+  process.env.MONGODB_URI || "mongodb://mongo:27017/lessonsdb";
+const client = new MongoClient(MONGODB_URI);
 
-// Создание таблицы (если её нет)
-db.run(`
-  CREATE TABLE IF NOT EXISTS lessons (
-    id INTEGER PRIMARY KEY,
-    title TEXT NOT NULL,
-    counter INTEGER NOT NULL
-  )
-`);
+let db: Db;
+let lessonsCollection: Collection<Lesson>;
+
+async function initDB() {
+  try {
+    await client.connect();
+    console.log("Подключено к MongoDB");
+    db = client.db();
+    lessonsCollection = db.collection<Lesson>("lessons");
+  } catch (err) {
+    console.error("Ошибка подключения к MongoDB:", err);
+    process.exit(1);
+  }
+}
 
 // Команда /start
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Привет! Я бот для учёта уроков.");
-});
-
-// Команда /lessons — показать оставшиеся уроки
-bot.onText(/\/lessons/, (msg) => {
-  const now = new Date();
-
-  // Получаем уроки из БД
-  db.all<Lesson>(
-    "SELECT * FROM lessons WHERE counter > 0",
-    (err, rows: Lesson[]) => {
-      if (err) {
-        console.error("Ошибка при запросе к БД:", err);
-        bot.sendMessage(msg.chat.id, "Произошла ошибка при получении данных.");
-        return;
-      }
-
-      if (rows.length === 0) {
-        bot.sendMessage(msg.chat.id, "Нет предстоящих уроков.");
-      } else {
-        const list = rows
-          .map((lesson) => `- ${lesson.title} (осталось: ${lesson.counter})`)
-          .join("\n");
-        bot.sendMessage(msg.chat.id, `Оставшиеся уроки:\n${list}`);
-      }
-    },
+  bot.sendMessage(
+    msg.chat.id,
+    "Привет! Я бот для учёта уроков (использует MongoDB).",
   );
 });
 
-bot.onText(/\/add_lesson (.+?) (\d+)/, (msg, match) => {
+// Команда /lessons — показать оставшиеся уроки
+bot.onText(/\/lessons/, async (msg) => {
+  try {
+    const lessons = await lessonsCollection
+      .find({ counter: { $gt: 0 } })
+      .toArray();
+
+    if (lessons.length === 0) {
+      bot.sendMessage(msg.chat.id, "Нет предстоящих уроков.");
+    } else {
+      const list = lessons
+        .map((lesson) => `- ${lesson.title} (осталось: ${lesson.counter})`)
+        .join("\n");
+      bot.sendMessage(msg.chat.id, `Оставшиеся уроки:\n${list}`);
+    }
+  } catch (err) {
+    console.error("Ошибка при запросе к БД:", err);
+    bot.sendMessage(msg.chat.id, "Произошла ошибка при получении данных.");
+  }
+});
+
+// Команда /add_lesson <название> <число>
+bot.onText(/\/add_lesson (.+?) (\d+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const title = match![1].trim();
   const count = parseInt(match![2], 10);
@@ -70,74 +77,65 @@ bot.onText(/\/add_lesson (.+?) (\d+)/, (msg, match) => {
     return;
   }
 
-  // UPSERT: вставка или обновление
-  db.run(
-    `INSERT INTO lessons (title, counter) VALUES (?, ?)
-     ON CONFLICT(id) DO UPDATE SET counter = excluded.counter`,
-    [title, count],
-    function (err) {
-      if (err) {
-        console.error("Ошибка БД:", err);
-        bot.sendMessage(chatId, "Ошибка при добавлении урока.");
-        return;
-      }
-      bot.sendMessage(
-        chatId,
-        `Урок "${title}" добавлен/обновлён. Осталось: ${count}`,
-      );
-    },
-  );
+  try {
+    const result = await lessonsCollection.updateOne(
+      { title },
+      { $set: { title, counter: count } },
+      { upsert: true },
+    );
+
+    bot.sendMessage(
+      chatId,
+      `Урок "${title}" добавлен/обновлён. Осталось: ${count}`,
+    );
+  } catch (err) {
+    console.error("Ошибка БД:", err);
+    bot.sendMessage(chatId, "Ошибка при добавлении урока.");
+  }
 });
 
-bot.onText(/\/done (.+)/, (msg, match) => {
+// Команда /done <название>
+bot.onText(/\/done (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const title = match![1].trim();
 
-  db.get<Lesson>(
-    "SELECT id, counter FROM lessons WHERE title = ?",
-    [title],
-    (err, row) => {
-      if (err) {
-        console.error("Ошибка БД:", err);
-        bot.sendMessage(chatId, "Ошибка при поиске урока.");
-        return;
-      }
-      if (!row) {
-        bot.sendMessage(chatId, `Урок "${title}" не найден.`);
-        return;
-      }
+  try {
+    const lesson = await lessonsCollection.findOne({ title });
 
-      const newCounter = row.counter - 1;
-      if (newCounter <= 0) {
-        // Удаляем урок
-        db.run("DELETE FROM lessons WHERE id = ?", [row.id], function (err) {
-          if (err) {
-            console.error("Ошибка удаления:", err);
-            bot.sendMessage(chatId, "Ошибка при удалении.");
-            return;
-          }
-          bot.sendMessage(chatId, `Урок "${title}" завершён!`);
-        });
-      } else {
-        // Обновляем counter
-        db.run(
-          "UPDATE lessons SET counter = ? WHERE id = ?",
-          [newCounter, row.id],
-          function (err) {
-            if (err) {
-              console.error("Ошибка обновления:", err);
-              bot.sendMessage(chatId, "Ошибка при обновлении.");
-              return;
-            }
-            bot.sendMessage(
-              chatId,
-              `Урок "${title}" обновлён. Осталось: ${newCounter}`,
-            );
-          },
-        );
-      }
-    },
-  );
+    if (!lesson) {
+      bot.sendMessage(chatId, `Урок "${title}" не найден.`);
+      return;
+    }
+
+    const newCounter = lesson.counter - 1;
+
+    if (newCounter <= 0) {
+      // Удаляем урок
+      await lessonsCollection.deleteOne({ _id: lesson._id });
+      bot.sendMessage(chatId, `Урок "${title}" завершён!`);
+    } else {
+      // Обновляем counter
+      await lessonsCollection.updateOne(
+        { _id: lesson._id },
+        { $set: { counter: newCounter } },
+      );
+      bot.sendMessage(
+        chatId,
+        `Урок "${title}" обновлён. Осталось: ${newCounter}`,
+      );
+    }
+  } catch (err) {
+    console.error("Ошибка БД:", err);
+    bot.sendMessage(chatId, "Ошибка при обработке.");
+  }
 });
 
-console.log("Бот запущен!");
+// Инициализация и запуск
+initDB()
+  .then(() => {
+    console.log("Бот запущен!");
+  })
+  .catch((err) => {
+    console.error("Критическая ошибка:", err);
+    process.exit(1);
+  });
