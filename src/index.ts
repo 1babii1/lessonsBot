@@ -18,7 +18,7 @@ if (!token) {
 const bot = new TelegramBot(token, { polling: true });
 
 // Подключение к SQLite
-const db = new sqlite3.Database("./lessons.db");
+const db = new sqlite3.Database("/app/lessons.db");
 
 // Создание таблицы (если её нет)
 db.run(`
