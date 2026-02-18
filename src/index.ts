@@ -41,7 +41,7 @@ async function initDB() {
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    "Привет! Я бот для учёта уроков (использует MongoDB).",
+    "Привет! Я бот для учёта уроков. /add_lesson <название> <число> - добавить урок, /done <название> - завершить урок, /lessons - показать оставшиеся уроки.",
   );
 });
 
@@ -86,7 +86,7 @@ bot.onText(/\/add_lesson (.+?) (\d+)/, async (msg, match) => {
 
     bot.sendMessage(
       chatId,
-      `Урок "${title}" добавлен/обновлён. Осталось: ${count}`,
+      `Ученик "${title}" добавлен/обновлён. Осталось: ${count}`,
     );
   } catch (err) {
     console.error("Ошибка БД:", err);
@@ -103,7 +103,7 @@ bot.onText(/\/done (.+)/, async (msg, match) => {
     const lesson = await lessonsCollection.findOne({ title });
 
     if (!lesson) {
-      bot.sendMessage(chatId, `Урок "${title}" не найден.`);
+      bot.sendMessage(chatId, `Ученик "${title}" не найден.`);
       return;
     }
 
@@ -112,7 +112,7 @@ bot.onText(/\/done (.+)/, async (msg, match) => {
     if (newCounter <= 0) {
       // Удаляем урок
       await lessonsCollection.deleteOne({ _id: lesson._id });
-      bot.sendMessage(chatId, `Урок "${title}" завершён!`);
+      bot.sendMessage(chatId, `Ученик "${title}" завершил урок!`);
     } else {
       // Обновляем counter
       await lessonsCollection.updateOne(
@@ -121,7 +121,7 @@ bot.onText(/\/done (.+)/, async (msg, match) => {
       );
       bot.sendMessage(
         chatId,
-        `Урок "${title}" обновлён. Осталось: ${newCounter}`,
+        `Ученик "${title}" обновлён. Осталось: ${newCounter}`,
       );
     }
   } catch (err) {
